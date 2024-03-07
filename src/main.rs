@@ -100,16 +100,16 @@ fn main() -> std::io::Result<()> {
         },
     );
     finish_message.insert(
-        "0".to_owned(),
+        "1".to_owned(),
         FinishMessage {
-            score: score[0] as f32,
+            score: score[1] as f32,
             state: "OK".to_owned(),
         },
     );
     finish_message.insert(
-        "0".to_owned(),
+        "2".to_owned(),
         FinishMessage {
-            score: score[0] as f32,
+            score: score[2] as f32,
             state: "OK".to_owned(),
         },
     );
@@ -122,5 +122,10 @@ fn main() -> std::io::Result<()> {
         },
     };
     println!("{}", serde_json::to_string(&finish).unwrap());
-    Ok(())
+
+    // Dead loop: wait to be killed by judger
+    let mut i = 0;
+    loop {
+        i = 0;
+    }
 }
