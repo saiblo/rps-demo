@@ -1,27 +1,23 @@
 mod io_types;
 mod logic;
-mod protocol;
 mod score;
 
 #[cfg(test)]
 mod test;
 
+extern crate uniform_logic;
+
 use io_types::{Display, InitData, Request, Response};
 use logic::{judge_round, Gesture, RoundResult};
-use protocol::{AgentStatus, FinishMessage, FinishOutput, InitInput, RoundInput, RoundOutput};
 use score::{ComboScoring, NormalScoring, Scoring};
-use std::collections::HashMap;
+use uniform_logic::*;
 
 const MAX_ROUND: u32 = 512;
 
 fn main() -> std::io::Result<()> {
-    let stdin = std::io::stdin();
-
     // Init
-    let mut init_str = String::new();
-    stdin.read_line(&mut init_str)?;
-    let init: InitInput<InitData> = serde_json::from_str(&init_str).unwrap();
-    let mut scoring: Box<dyn Scoring> = if init.initdata.use_combo_scoring {
+    let init = receive_init_message::<InitData>().unwrap();
+    let mut scoring: Box<dyn Scoring> = if init.use_combo_scoring {
         Box::new(ComboScoring::new())
     } else {
         Box::new(NormalScoring::new())
@@ -30,55 +26,45 @@ fn main() -> std::io::Result<()> {
     // Round output and input
     let mut last_gestures = [Gesture::Rock; 3];
     let mut last_result = [RoundResult::Tie; 3];
+
     for _round in 0..MAX_ROUND {
-        // Prepare output
+        let total_scores = scoring.get_score();
+        // Round output
         let request = Request {
             last_gestures,
             last_result,
-            total_scores: scoring.get_score(),
+            total_scores,
         };
-        let mut output_content = HashMap::new();
-        output_content.insert("0".to_owned(), request.clone());
-        output_content.insert("1".to_owned(), request.clone());
-        output_content.insert("2".to_owned(), request);
         let display = Display {
             last_gestures,
             last_result,
-            total_scores: scoring.get_score(),
+            total_scores,
         };
-        let round_output = RoundOutput {
-            content: output_content.into(),
-            display: display.clone(),
-        };
-        println!("{}", serde_json::to_string(&round_output).unwrap());
+        RoundMessageSender::<Request, Display>::new()
+            .send_agent("0".to_owned(), request.clone())
+            .send_agent("1".to_owned(), request.clone())
+            .send_agent("2".to_owned(), request.clone())
+            .send_display(display.clone())
+            .end()
+            .unwrap();
 
-        // Parse input
-        let mut input_str = String::new();
-        stdin.read_line(&mut input_str)?;
-        let round_input: RoundInput<Response> = serde_json::from_str(&input_str).unwrap();
-        let responses = round_input.log.0;
-        // Check AI status
-        let mut ok = true;
-        let mut finish_message = HashMap::<String, FinishMessage>::new();
-        responses.iter().for_each(|(k, v)| {
-            if v.verdict != AgentStatus::OK {
-                finish_message.insert(
-                    k.to_owned(),
-                    FinishMessage {
-                        score: 0.,
-                        state: "FAIL".to_owned(),
-                    },
-                );
-                ok = false;
-            }
-        });
+        // Round input
+        let responses = recieve_round_message::<Response>().unwrap();
         // AI error
-        if !ok {
-            let finish = FinishOutput {
-                content: finish_message,
-                display,
-            };
-            println!("{}", serde_json::to_string(&finish).unwrap());
+        if responses
+            .values()
+            .any(|res| res.verdict != AgentVerdict::OK)
+        {
+            let mut sender = FinishMessageSender::<Display>::new();
+            for (name, response) in responses {
+                if response.verdict != AgentVerdict::OK {
+                    sender = sender.send_agent(name, 0., "FAIL".to_owned());
+                } else {
+                    let id: usize = str::parse(&name).unwrap();
+                    sender = sender.send_agent(name, total_scores[id] as f32, "OK".to_owned());
+                }
+            }
+            sender.send_display(display).end().unwrap();
             return Ok(());
         }
         // Get gestures
@@ -91,37 +77,18 @@ fn main() -> std::io::Result<()> {
 
     // Finish
     let score = scoring.get_score();
-    let mut finish_message = HashMap::<String, FinishMessage>::new();
-    finish_message.insert(
-        "0".to_owned(),
-        FinishMessage {
-            score: score[0] as f32,
-            state: "OK".to_owned(),
-        },
-    );
-    finish_message.insert(
-        "1".to_owned(),
-        FinishMessage {
-            score: score[1] as f32,
-            state: "OK".to_owned(),
-        },
-    );
-    finish_message.insert(
-        "2".to_owned(),
-        FinishMessage {
-            score: score[2] as f32,
-            state: "OK".to_owned(),
-        },
-    );
-    let finish = FinishOutput {
-        content: finish_message.into(),
-        display: Display {
-            last_gestures,
-            last_result,
-            total_scores: scoring.get_score(),
-        },
+    let display = Display {
+        last_gestures,
+        last_result,
+        total_scores: score,
     };
-    println!("{}", serde_json::to_string(&finish).unwrap());
+    FinishMessageSender::<Display>::new()
+        .send_agent("0".to_owned(), score[0] as f32, "OK".to_owned())
+        .send_agent("1".to_owned(), score[1] as f32, "OK".to_owned())
+        .send_agent("2".to_owned(), score[2] as f32, "OK".to_owned())
+        .send_display(display)
+        .end()
+        .unwrap();
 
     // Dead loop: wait to be killed by judger
     let mut i = 0;

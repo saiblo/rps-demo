@@ -1,4 +1,4 @@
-use crate::protocol::{AgentStatus, FinishOutput, FinishMessage, InitInput, RoundOutput, RoundInput};
+use uniform_logic::*;
 use serde_json::{from_str, to_string};
 use std::collections::HashMap;
 
@@ -64,6 +64,6 @@ fn test_deserialize_response() {
     let response: RoundInput<String> = from_str(res_str).unwrap();
     assert_eq!(
         response.log.0.get("player0").unwrap().verdict,
-        AgentStatus::OK
+        AgentVerdict::OK
     );
 }
