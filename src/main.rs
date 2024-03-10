@@ -68,7 +68,10 @@ fn main() -> std::io::Result<()> {
             return Ok(());
         }
         // Get gestures
-        last_gestures = ["0", "1", "2"].map(|k| responses.get(k).unwrap().response.gesture);
+        for i in 0..3 {
+            let names = ["0", "1", "2"];
+            last_gestures[i] = responses.get(names[i]).unwrap().response.gesture;
+        }
         // Judge
         last_result = judge_round(last_gestures);
         // Scoring
