@@ -1,6 +1,6 @@
-use uniform_logic::*;
 use serde_json::{from_str, to_string};
 use std::collections::HashMap;
+use uniform_logic_rs::*;
 
 #[test]
 fn test_deserialize_init() {

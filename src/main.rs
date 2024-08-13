@@ -5,12 +5,12 @@ mod score;
 #[cfg(test)]
 mod test;
 
-extern crate uniform_logic;
+extern crate uniform_logic_rs;
 
 use io_types::{Display, InitData, Request, Response};
 use logic::{judge_round, Gesture, RoundResult};
 use score::{ComboScoring, NormalScoring, Scoring};
-use uniform_logic::*;
+use uniform_logic_rs::*;
 
 const MAX_ROUND: u32 = 512;
 
@@ -40,13 +40,12 @@ fn main() -> std::io::Result<()> {
             last_result,
             total_scores,
         };
-        RoundMessageSender::<Request, Display>::new()
-            .send_agent("0".to_owned(), request.clone())
-            .send_agent("1".to_owned(), request.clone())
-            .send_agent("2".to_owned(), request.clone())
-            .send_display(display.clone())
-            .end()
-            .unwrap();
+        let mut sender = RoundMessageSender::<Request, Display>::new();
+        sender.send_agent("0".to_owned(), request.clone());
+        sender.send_agent("1".to_owned(), request.clone());
+        sender.send_agent("2".to_owned(), request.clone());
+        sender.send_display(display.clone());
+        sender.end().unwrap();
 
         // Round input
         let responses = recieve_round_message::<Response>().unwrap();
@@ -58,13 +57,14 @@ fn main() -> std::io::Result<()> {
             let mut sender = FinishMessageSender::<Display>::new();
             for (name, response) in responses {
                 if response.verdict != AgentVerdict::OK {
-                    sender = sender.send_agent(name, 0., "FAIL".to_owned());
+                    sender.send_agent(name, 0., "FAIL".to_owned());
                 } else {
                     let id: usize = str::parse(&name).unwrap();
-                    sender = sender.send_agent(name, total_scores[id] as f32, "OK".to_owned());
+                    sender.send_agent(name, total_scores[id] as f32, "OK".to_owned());
                 }
             }
-            sender.send_display(display).end().unwrap();
+            sender.send_display(display);
+            sender.end().unwrap();
             return Ok(());
         }
         // Get gestures
@@ -85,17 +85,13 @@ fn main() -> std::io::Result<()> {
         last_result,
         total_scores: score,
     };
-    FinishMessageSender::<Display>::new()
-        .send_agent("0".to_owned(), score[0] as f32, "OK".to_owned())
-        .send_agent("1".to_owned(), score[1] as f32, "OK".to_owned())
-        .send_agent("2".to_owned(), score[2] as f32, "OK".to_owned())
-        .send_display(display)
-        .end()
-        .unwrap();
+    let mut sender = FinishMessageSender::<Display>::new();
+    sender.send_agent("0".to_owned(), score[0] as f32, "OK".to_owned());
+    sender.send_agent("1".to_owned(), score[1] as f32, "OK".to_owned());
+    sender.send_agent("2".to_owned(), score[2] as f32, "OK".to_owned());
+    sender.send_display(display);
+    sender.end().unwrap();
 
     // Dead loop: wait to be killed by judger
-    let mut i = 0;
-    loop {
-        i = 0;
-    }
+    loop {}
 }
